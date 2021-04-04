@@ -4,6 +4,7 @@ import io.vertx.config.ConfigRetriever;
 import io.vertx.config.ConfigRetrieverOptions;
 import io.vertx.config.ConfigStoreOptions;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Promise;
@@ -12,6 +13,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
+import io.vertx.jdbcclient.JDBCPool;
 import org.apache.logging.log4j.LogManager;
 
 public final class MainVerticle extends AbstractVerticle {
@@ -20,8 +22,9 @@ public final class MainVerticle extends AbstractVerticle {
     public void start(Promise<Void> startPromise) {
         loadConfig().compose(config -> {
             LogManager.getLogger().atInfo().log("Loaded configuration {}", config);
-            return setupJdbcClient(config.getJsonObject("database")).compose(database -> setupHttpServer(config.getJsonObject(
-                "server"), database));
+            return CompositeFuture.all(setupJdbcClient(config.getJsonObject("database")),
+                                       setupJdbcPool(config.getJsonObject("database")))
+                                  .compose(database -> setupHttpServer(config.getJsonObject("server"), database));
         }).onComplete(deployment -> {
             var logger = LogManager.getLogger();
             if (deployment.succeeded()) {
@@ -47,9 +50,15 @@ public final class MainVerticle extends AbstractVerticle {
         return Future.succeededFuture(jdbcClient);
     }
 
-    private Future<HttpServer> setupHttpServer(JsonObject config, JDBCClient database) {
+    private Future<JDBCPool> setupJdbcPool(JsonObject config) {
+        var pool = JDBCPool.pool(vertx, config);
+        return Future.succeededFuture(pool);
+    }
+
+    private Future<HttpServer> setupHttpServer(JsonObject config, CompositeFuture database) {
         var router = Router.router(vertx);
-        router.route("/jdbcclient").handler(returnFromJdbcClient(database));
+        router.route("/jdbcclient").handler(returnFromJdbcClient(database.resultAt(0)));
+        router.route("/jdbcpool").handler(returnFromPool(database.resultAt(1)));
         var port = config.getInteger("port");
         return vertx.createHttpServer().requestHandler(router).listen(port);
     }
@@ -67,6 +76,20 @@ public final class MainVerticle extends AbstractVerticle {
                 serverError(req, query.cause());
             }
         });
+    }
+
+    private Handler<RoutingContext> returnFromPool(Pool pool) {
+        return req -> pool.query("select version()")
+                          .mapping(row -> row.getString("version"))
+                          .execute()
+                          .onSuccess(query -> {
+                              if (query.iterator().hasNext()) {
+                                  ok(req, query.iterator().next());
+                              } else {
+                                  notFound(req);
+                              }
+                          })
+                          .onFailure(cause -> serverError(req, cause));
     }
 
     private void ok(RoutingContext req, String body) {
