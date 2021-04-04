@@ -27,6 +27,7 @@ dependencies {
     implementation platform('io.vertx:vertx-stack-depchain:4.0.3')
     implementation 'io.vertx:vertx-web'
     implementation 'io.vertx:vertx-jdbc-client'
+    implementation 'io.vertx:vertx-pg-client'
     implementation 'io.vertx:vertx-config'
     implementation 'io.vertx:vertx-config-yaml'
     implementation 'org.apache.logging.log4j:log4j-api:2.14.1'

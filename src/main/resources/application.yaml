@@ -5,3 +5,4 @@ database:
   driver_class: org.postgresql.ds.PGSimpleDataSource
   user: user
   password: pass
+  uri: postgresql://user:pass@localhost:5432/postgres

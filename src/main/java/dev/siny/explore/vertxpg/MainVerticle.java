@@ -14,6 +14,8 @@ import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.pgclient.PgPool;
+import io.vertx.sqlclient.Pool;
 import org.apache.logging.log4j.LogManager;
 
 public final class MainVerticle extends AbstractVerticle {
@@ -22,8 +24,10 @@ public final class MainVerticle extends AbstractVerticle {
     public void start(Promise<Void> startPromise) {
         loadConfig().compose(config -> {
             LogManager.getLogger().atInfo().log("Loaded configuration {}", config);
-            return CompositeFuture.all(setupJdbcClient(config.getJsonObject("database")),
-                                       setupJdbcPool(config.getJsonObject("database")))
+            var databaseConfig = config.getJsonObject("database");
+            return CompositeFuture.all(setupJdbcClient(databaseConfig),
+                                       setupJdbcPool(databaseConfig),
+                                       setupPgPool(databaseConfig))
                                   .compose(database -> setupHttpServer(config.getJsonObject("server"), database));
         }).onComplete(deployment -> {
             var logger = LogManager.getLogger();
@@ -55,10 +59,16 @@ public final class MainVerticle extends AbstractVerticle {
         return Future.succeededFuture(pool);
     }
 
+    private Future<PgPool> setupPgPool(JsonObject config) {
+        var pool = PgPool.pool(vertx, config.getString("uri"));
+        return Future.succeededFuture(pool);
+    }
+
     private Future<HttpServer> setupHttpServer(JsonObject config, CompositeFuture database) {
         var router = Router.router(vertx);
         router.route("/jdbcclient").handler(returnFromJdbcClient(database.resultAt(0)));
         router.route("/jdbcpool").handler(returnFromPool(database.resultAt(1)));
+        router.route("/pgpool").handler(returnFromPool(database.resultAt(2)));
         var port = config.getInteger("port");
         return vertx.createHttpServer().requestHandler(router).listen(port);
     }
