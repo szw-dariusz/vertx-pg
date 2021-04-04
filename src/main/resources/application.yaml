@@ -1,0 +1,7 @@
+server:
+  port: 8080
+database:
+  url: jdbc:postgresql://localhost:5432/postgres
+  driver_class: org.postgresql.ds.PGSimpleDataSource
+  user: user
+  password: pass

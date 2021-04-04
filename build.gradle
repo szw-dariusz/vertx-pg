@@ -1,0 +1,50 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version "6.1.0"
+}
+
+group 'dev.siny.explore'
+version '1.0.0'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+java {
+    def version = JavaVersion.VERSION_15
+    sourceCompatibility = version
+    targetCompatibility = version
+    modularity.inferModulePath = true
+}
+
+application {
+    mainClass = 'io.vertx.core.Launcher'
+}
+
+dependencies {
+    implementation platform('io.vertx:vertx-stack-depchain:4.0.3')
+    implementation 'io.vertx:vertx-web'
+    implementation 'io.vertx:vertx-jdbc-client'
+    implementation 'io.vertx:vertx-config'
+    implementation 'io.vertx:vertx-config-yaml'
+    implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
+    runtimeOnly 'org.apache.logging.log4j:log4j-core:2.14.1'
+    implementation 'org.postgresql:postgresql:42.2.19'
+}
+
+shadowJar {
+    mainClassName = 'io.vertx.core.Launcher'
+    archiveClassifier = 'fat'
+    manifest.attributes 'Main-Verticle': 'dev.siny.explore.vertxpg.MainVerticle'
+    mergeServiceFiles()
+}
+
+tasks.withType(JavaExec) {
+    args 'run',
+         'dev.siny.explore.vertxpg.MainVerticle',
+         '--redeploy=src/**/*',
+         '--launcher-class=io.vertx.core.Launcher',
+         "--on-redeploy=${rootProject.projectDir}/gradlew classes"
+}
